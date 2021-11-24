@@ -70,7 +70,7 @@ clusterRunPreparingTask <- function(
     folder_prefix = NULL,
     r_script = 'R\\bin\\i386\\Rscript.exe',
     r_code = 'RCode.R',
-    ids = 0)
+    ids = 0, save_factor = FALSE)
 {
     library(digest)
     if (ids == 0)
@@ -94,8 +94,19 @@ clusterRunPreparingTask <- function(
         c_factor[!(names(c_factor) %in% par_factor)],
         stringsAsFactors = FALSE)
     
+    updateTask <- function(tasks) {
+        n <- 100000
+        count <- ceiling(nrow(tasks) / n)
+        for (k in seq_len(count)) {
+            start_pos <- (k - 1) * n + 1
+            end_pos <- min(k * n, nrow(tasks))
+            con <- connectTaskDB()
+            addTasks(con, project, tasks[seq(start_pos, end_pos),])
+            disconnectTaskDB(con)
+        }
+    }
     # Generate the task for all simulations
-    
+    remaining_mysqls <- NULL
     for (i in seq(length = nrow(c_par_factor)))
     {        
         i_factors <- c_com_factor
@@ -116,13 +127,16 @@ clusterRunPreparingTask <- function(
         mysql <- as.data.frame(matrix(NA, nrow = nrow(i_factors), ncol = 0))
         mysql$id <- seq(along = file_prefix) + ids
         ids <- max(mysql$id)
-        
-        input_name <- i_factors[,input_factor]
-        if (length(input_factor) > 1)
-        {
-            input_name <-  apply(i_factors[,input_factor], 1, paste, collapse = '_')
+        if (is.null(input_factor) && length(input_factor) == 0) {
+            mysql$inputs <- ""
+        } else {
+            input_name <- i_factors[,input_factor]
+            if (length(input_factor) > 1)
+            {
+                input_name <-  apply(i_factors[,input_factor], 1, paste, collapse = '_')
+            }
+            mysql$inputs <- sprintf('%s\\%s\\Input\\Sims\\%s.Rds', sharedrive, project, input_name)
         }
-        mysql$inputs <- sprintf('%s\\%s\\Input\\Sims\\%s.Rds', sharedrive, project, input_name)
         
         mysql$commands <- paste(r_script,  ' ', r_code, ' ',
             sim_title, ' ', file_prefix, ' 1>nul 2>nul', sep = '')
@@ -140,16 +154,30 @@ clusterRunPreparingTask <- function(
         mysql$outputs <- paste(output_dir, '\\',
             file_prefix, '.Rds', sep = '')
         
-        con <- connectTaskDB()
-        addTasks(con, project, mysql)
-        disconnectTaskDB(con)
-        
-        output_files <- i_factors
-        output_files$prefix <- file_prefix
-        output_files$outputs <- paste0(i_folder_output, '/', file_prefix, '.Rds')
-        
-        save(output_files, mysql, file = file.path(local, project, 'Factor',
-            sprintf('%s.RData', i_folder_output)), compress = TRUE)
+        remaining_mysqls <- bind_rows(remaining_mysqls, mysql)
+        if (nrow(remaining_mysqls) > 100000) {
+            updateTask(remaining_mysqls)
+            remaining_mysqls <- NULL
+        }
+        # con <- connectTaskDB()
+        # addTasks(con, project, mysql)
+        # disconnectTaskDB(con)
+        # 
+        if (save_factor) {
+            output_files <- i_factors
+            output_files$prefix <- file_prefix
+            output_files$outputs <- paste0(i_folder_output, '/', file_prefix, '.Rds')
+            file_path <- file.path(local, project, 'Factor',
+                                   sprintf('%s.RData', i_folder_output))
+            if (!file.exists(dirname(file_path))) {
+                dir.create(dirname(file_path), recursive = TRUE)
+            }
+            save(output_files, mysql, file = file_path, compress = TRUE)
+        }
+    }
+    
+    if (!is.null(remaining_mysqls)) {
+        updateTask(remaining_mysqls)
     }
     
     # Create output folder
@@ -159,7 +187,7 @@ clusterRunPreparingTask <- function(
         folder_outputs <- paste0(folder_prefix, '/', folder_outputs)
     }
     lapply(paste0(local, '/', project, '/Output/', 
-        folder_outputs), dir.create, showWarnings = FALSE)
+        folder_outputs), dir.create, showWarnings = FALSE, recursive = TRUE)
     ids
 }
 
