@@ -217,7 +217,7 @@ apsimOut2Nc <- function(filename, years, factors, traits, par_factor,
     tmp_folder = file.path('Results', 'tmpNc')
     )
 {
-    library(RAPSIM)
+    library(rapsim)
     library(ncdf4cf)
     library(ncdf4)
     # print('Create a empty netcdf file.')
@@ -240,7 +240,7 @@ apsimOut2Nc <- function(filename, years, factors, traits, par_factor,
             paste0(paste(par_grid[i,], collapse = '_'), '.RData'))
         if (!file.exists(output))
         {
-            library(RAPSIM)
+            library(rapsim)
             library(ncdf4)
             library(digest)
             if (is.character(factor_files))

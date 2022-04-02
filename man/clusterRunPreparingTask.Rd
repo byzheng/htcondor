@@ -15,7 +15,8 @@ clusterRunPreparingTask(
   folder_prefix = NULL,
   r_script = "R\\\\bin\\\\i386\\\\Rscript.exe",
   r_code = "RCode.R",
-  ids = 0
+  ids = 0,
+  save_factor = FALSE
 )
 }
 \arguments{
