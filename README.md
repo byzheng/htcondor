@@ -8,3 +8,10 @@
 
 [htcondor](https://htcondor.bangyou.me) package is to help run programs in HTCondor.
 
+
+## Installation
+To install the latest development version: 
+
+```{r}
+remotes::install_github("byzheng/htcondor")
+```
